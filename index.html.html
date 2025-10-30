@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🎁 Gift Reveal Portal</title>
+
+  <!-- Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --accent: #ff007f;
+      --white: #ffffff;
+      --bg1: #00ff88;
+      --bg2: #00bfff;
+      --bg3: #ffcc00;
+    }
+    *{box-sizing:border-box}
+    body {
+      margin:0; padding:0;
+      font-family:'Poppins',sans-serif;
+      background: linear-gradient(135deg,var(--bg1),var(--bg2),var(--bg3));
+      background-size:400% 400%;
+      animation: gradientMove 10s ease infinite;
+      min-height:100vh;
+      display:flex; align-items:center; justify-content:center;
+      color:var(--white);
+    }
+    @keyframes gradientMove {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+    .card {
+      width:min(900px,95%);
+      background:rgba(0,0,0,0.35);
+      border-radius:16px;
+      padding:30px;
+      text-align:center;
+      box-shadow:0 8px 24px rgba(0,0,0,0.45);
+    }
+    h1 { font-size:1.9rem; margin-bottom:8px; text-shadow:2px 2px 12px rgba(0,0,0,0.45);}
+    p { font-size:1.05rem; opacity:0.95; margin:6px 0; }
+    .btn {
+      display:inline-block;
+      background:var(--white); color:var(--accent);
+      font-weight:600; text-decoration:none;
+      border-radius:30px; padding:12px 28px;
+      margin-top:16px; transition:0.22s;
+      border:0; cursor:pointer;
+    }
+    .btn:focus { outline:3px solid rgba(255,0,127,0.16); outline-offset:4px; }
+    .btn:hover { background:var(--accent); color:var(--white); }
+    .loader {
+      font-size:3rem; animation:spin 1s linear infinite; margin-bottom:12px;
+    }
+    @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+    #formFrame {
+      width:100%; height:750px;
+      border:0; border-radius:12px;
+      margin-top:18px;
+      box-shadow:0 8px 20px rgba(0,0,0,0.5);
+    }
+    .hidden { display:none; }
+    .note {
+      font-size:0.95rem;
+      margin-top:10px;
+      opacity:0.95;
+      background:rgba(255,255,255,0.06);
+      padding:8px 12px;
+      border-radius:8px;
+    }
+    .numberBox {
+      background:rgba(255,255,255,0.15);
+      padding:10px 14px;
+      border-radius:10px;
+      display:inline-block;
+      font-weight:600;
+      margin-top:8px;
+    }
+    @media (max-width:720px){ h1{font-size:1.5rem;} #formFrame{height:900px;} }
+  </style>
+</head>
+<body>
+
+  <div class="card" role="region" aria-label="Gift reveal card">
+
+    <!-- STEP 1: Loading Screen -->
+    <div id="loading-screen" aria-live="polite">
+      <div class="loader" aria-hidden="true">🎁</div>
+      <h1>Checking Your Luck...</h1>
+      <p>कृपया कुछ क्षण प्रतीक्षा करें — आपका गिफ्ट तय किया जा रहा है...</p>
+      <p class="note">🎁 इस ड्रॉ में उपलब्ध गिफ्ट्स: ⌚ Smart Watch, 🎟 Free Course, 🎓 50% OFF Coupon, और 🆕 1 Course + Gift Item Combo</p>
+    </div>
+
+    <!-- STEP 2: Gift Result -->
+    <div id="result-screen" class="hidden" aria-live="polite">
+      <h1 id="gift-title">🎉 Congratulations!</h1>
+      <p class="numberBox" id="gift-number" aria-atomic="true"></p>
+      <p id="gift-text"></p>
+      <p class="note">📸 कृपया इस पेज का स्क्रीनशॉट लें और Google Form में अपलोड करें।</p>
+      <button id="claimBtn" class="btn" type="button" aria-haspopup="true">🎓 Claim Gift</button>
+    </div>
+
+    <!-- STEP 3: Claim Form -->
+    <div id="form-screen" class="hidden">
+      <h1>🎁 Claim Your Reward</h1>
+      <p>नीचे फार्म भरकर अपना पुरस्कार क्लेम करें।</p>
+      <iframe id="formFrame" title="Claim Form" aria-label="Google claim form"></iframe>
+    </div>
+
+  </div>
+
+<script>
+/*
+  Improvements made:
+  - Uses crypto.getRandomValues for better client-side randomness.
+  - Persists draw result in localStorage so the user sees the same result after refresh.
+  - Replaces anchor with an accessible button.
+  - Removes console debug log (keeps privacy).
+  - Adds basic ARIA attributes and minor accessibility enhancements.
+  - Keeps original prize lists but notes you should verify winners server-side for security.
+*/
+
+// === CONFIG ===
+const GOOGLE_FORM_BASE = "https://docs.google.com/forms/d/e/1FAIpQLSc7ygOp3narjd6ksd6UD6moVJ808t0CMRHXv00P2gnVhTaDuA/viewform";
+const SHOW_DELAY_MS = 2000; // loading time
+const STORAGE_KEY = "giftReveal:result";
+
+// === ELEMENTS ===
+const loadingScreen = document.getElementById("loading-screen");
+const resultScreen  = document.getElementById("result-screen");
+const formScreen    = document.getElementById("form-screen");
+const titleEl = document.getElementById("gift-title");
+const textEl  = document.getElementById("gift-text");
+const numEl = document.getElementById("gift-number");
+const claimBtn = document.getElementById("claimBtn");
+const formFrame = document.getElementById("formFrame");
+
+// === PREDEFINED WINNER NUMBERS ===
+const smartWatchWinners = [100, 500, 900];
+const freeCourseWinners = [200, 400, 800, 1600, 3200];
+const comboWinners = [7777, 9999]; // 1 course + 1 gift combo
+
+// helper: crypto-backed random integer in [1, max]
+function cryptoRandomInt(max) {
+  // use getRandomValues and modulo (acceptable here for small max)
+  const arr = new Uint32Array(1);
+  window.crypto.getRandomValues(arr);
+  return (arr[0] % max) + 1;
+}
+
+function computeResult(randomNumber) {
+  let title = "", text = "";
+  if (smartWatchWinners.includes(randomNumber)) {
+    title = "⌚ Smart Watch Winner!";
+    text  = "बधाई हो! आपने Smart Watch जीती है!";
+  } else if (freeCourseWinners.includes(randomNumber)) {
+    title = "🎟 Free Course Winner!";
+    text  = "शानदार! आप Free Course के विजेताओं में से एक हैं।";
+  } else if (comboWinners.includes(randomNumber)) {
+    title = "🆕 Special Combo Gift!";
+    text  = "आपको '1 Course Free + 1 Gift Item' का स्पेशल कॉम्बो मिला है!";
+  } else {
+    title = "🎓 50% OFF For You!";
+    text  = "आपको 50% OFF कूपन मिला है! Claim करके विवरण प्राप्त करें।";
+  }
+  return { title, text };
+}
+
+// Render result (and persist)
+function renderAndSave(randomNumber) {
+  const result = computeResult(randomNumber);
+  titleEl.innerText = result.title;
+  textEl.innerText = result.text;
+  numEl.innerText = `Your Draw Number: ${randomNumber}`;
+  // persist minimal data
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ number: randomNumber, title: result.title }));
+  } catch (e) {
+    // ignore storage errors
+  }
+}
+
+// Restore from storage if exists
+function restoreResult() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.number === "number") return parsed.number;
+  } catch (e) {
+    return null;
+  }
+  return null;
+}
+
+// === STEP 1 → STEP 2 ===
+setTimeout(() => {
+  loadingScreen.classList.add("hidden");
+
+  const persistedNumber = restoreResult();
+  let randomNumber = persistedNumber;
+  if (!randomNumber) {
+    randomNumber = cryptoRandomInt(10000); // 1..10000
+  }
+
+  resultScreen.classList.remove("hidden");
+  renderAndSave(randomNumber);
+
+}, SHOW_DELAY_MS);
+
+// === STEP 3 (Show Form in iframe) ===
+claimBtn.addEventListener("click", (e) => {
+  e.preventDefault();
+  // show form
+  resultScreen.classList.add("hidden");
+  formScreen.classList.remove("hidden");
+
+  // embed the google form (embedded param recommended)
+  formFrame.src = GOOGLE_FORM_BASE + "?embedded=true";
+  // try to set focus to iframe for keyboard users
+  setTimeout(() => {
+    formFrame.focus?.();
+  }, 300);
+});
+</script>
+
+</body>
+</html>
